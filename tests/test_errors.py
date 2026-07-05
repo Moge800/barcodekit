@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from barcodekit import BarcodeKit, BarcodeKitCommandError, BarcodeKitTimeout, _core
+from barcodekit import BarcodeKit, BarcodeKitCommandError, BarcodeKitTimeout, _core, _errors
 
 
 def _mock_binary(monkeypatch: Any) -> None:
@@ -78,3 +78,26 @@ def test_stderr_decoding_replaces_invalid_utf8(monkeypatch: Any) -> None:
         BarcodeKit().datamatrix("ABC123")
 
     assert "\ufffd" in str(caught.value)
+
+
+def test_command_display_preserves_argument_boundaries_and_redacts_text() -> None:
+    secret = "CUSTOMER SECRET"
+
+    display = _errors._display_command(
+        [
+            "C:/Program Files/barcode-rest.exe",
+            "generate",
+            "code128",
+            "--text",
+            secret,
+            "--output",
+            "-",
+        ]
+    )
+
+    assert secret not in display
+    assert "<redacted>" in display
+    assert (
+        '"C:/Program Files/barcode-rest.exe"' in display
+        or "'C:/Program Files/barcode-rest.exe'" in display
+    )

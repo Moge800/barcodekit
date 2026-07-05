@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import shlex
+import subprocess
 from collections.abc import Sequence
 
 
@@ -15,7 +18,10 @@ def _redact_command(command: Sequence[str]) -> tuple[str, ...]:
 
 
 def _display_command(command: Sequence[str]) -> str:
-    return " ".join(_redact_command(command))
+    redacted = _redact_command(command)
+    if os.name == "nt":
+        return subprocess.list2cmdline(redacted)
+    return shlex.join(redacted)
 
 
 class BarcodeKitError(Exception):
@@ -56,4 +62,3 @@ class BarcodeKitTimeout(BarcodeKitError):
         super().__init__(
             f"barcode-rest timed out after {timeout:g} seconds: {_display_command(command)}"
         )
-
