@@ -1,5 +1,7 @@
 # barcodekit
 
+[日本語](README_JP.md)
+
 `barcodekit` generates barcode PNG images from Python by invoking the local
 [`barcode-rest`](https://github.com/Moge800/barcode-rest) executable in its
 one-shot CLI mode.
