@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "barcodekit"
+version = "0.0.1"
+description = "Generate barcode PNGs with the local barcode-rest command-line tool."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Moge800" }]
+keywords = ["barcode", "datamatrix", "qr", "code128", "barcode-rest"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/Moge800/barcodekit"
+"Upstream CLI" = "https://github.com/Moge800/barcode-rest"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/barcodekit"]
+
+[tool.hatch.build]
+artifacts = [
+    "src/barcodekit/_bin/barcode-rest",
+    "src/barcodekit/_bin/barcode-rest.exe",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: tests that invoke a real barcode-rest executable",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/barcodekit"]
