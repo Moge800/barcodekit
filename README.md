@@ -91,7 +91,8 @@ Unsupported targets:
 - 32-bit Linux and 32-bit Raspberry Pi OS
 - musl-based Linux distributions such as Alpine Linux
 
-Binary-free source distributions are not intended for release. Development
+Binary-free source distributions are not intended for release. On the
+supported operating systems and CPU architectures listed above, development
 from a source checkout remains supported with `BARCODEKIT_BINARY` or
 `BarcodeKit(executable=...)`.
 

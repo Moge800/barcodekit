@@ -27,7 +27,7 @@ jobs:
           enable-cache: true
 
       - name: Install development environment
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
 
       - name: Run tests
         run: uv run pytest
@@ -37,4 +37,3 @@ jobs:
 
       - name: Run mypy
         run: uv run mypy src/barcodekit
-
