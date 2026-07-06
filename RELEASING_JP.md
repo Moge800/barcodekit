@@ -103,7 +103,11 @@ GitHub Releaseが公開されると、workflowは次の処理を行います。
 6. PyPI Trusted Publishingで公開
 7. PyPIへの公開成功後、wheelをGitHub Releaseへ添付
 
-tagとdefault branchのHEADが異なる場合、workflowは何もビルドせず停止します。
-Releaseを公開する前に、現在のdefault branch HEADへtagを移動または作り直してください。
-default branchを直接ビルドしてこの検証を回避してはいけません。release tagに含まれない
-コードを公開する原因になります。
+再実行時は、default branchがtagより1commit先に進んでいる場合があります。そのcommit
+の親がtagであり、かつcommit全体のtreeが決定的なmetadata同期結果と完全に一致する場合
+だけ、既存commitを再利用します。それ以外の差分がある場合は、ビルド前に停止します。
+
+初回実行時にtagとdefault branchのHEADが異なる場合は、Releaseを公開する前に、現在の
+default branch HEADへtagを移動または作り直してください。default branchを直接ビルド
+してこの検証を回避してはいけません。release tagに含まれないコードを公開する原因に
+なります。

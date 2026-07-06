@@ -106,7 +106,12 @@ On a published GitHub Release, the workflow:
 6. Publishes through PyPI Trusted Publishing.
 7. Attaches the wheels to the GitHub Release after PyPI succeeds.
 
-If the tag and default branch HEAD differ, the workflow stops before building
-anything. Move or recreate the tag at the current default branch HEAD before
-publishing the Release. Do not bypass this check by building the default branch:
-doing so could publish code that is not represented by the release tag.
+On a retry, the default branch may already be one commit ahead of the tag. The
+workflow reuses that commit only when its parent is the tag and its complete
+tree exactly matches the deterministic metadata synchronization result. Any
+other difference stops the workflow before building.
+
+For an initial run, if the tag and default branch HEAD differ, move or recreate
+the tag at the current default branch HEAD before publishing the Release. Do
+not bypass this check by building the default branch: doing so could publish
+code that is not represented by the release tag.
