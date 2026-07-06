@@ -11,12 +11,12 @@ _TARGETS = {
     "linux-amd64": ("barcodekit/_bin/barcode-rest", "manylinux_2_34_x86_64"),
     "linux-arm64": ("barcodekit/_bin/barcode-rest", "manylinux_2_17_aarch64"),
 }
-_REQUIRED_LICENSE_FILES = {
+_REQUIRED_LICENSE_PATHS = {
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "barcode-rest-MIT.txt",
-    "boombuler-barcode-MIT.txt",
-    "go-and-x-image-BSD-3-Clause.txt",
+    "licenses/barcode-rest-MIT.txt",
+    "licenses/boombuler-barcode-MIT.txt",
+    "licenses/go-and-x-image-BSD-3-Clause.txt",
 }
 
 
@@ -63,8 +63,14 @@ def verify_wheel(wheel: Path, target: str) -> None:
         if expected_tag not in metadata.splitlines():
             raise ValueError(f"WHEEL metadata does not contain {expected_tag}")
 
-        included_license_files = {Path(name).name for name in names}
-        missing_licenses = _REQUIRED_LICENSE_FILES - included_license_files
+        dist_info_dir = wheel_metadata[0].removesuffix("/WHEEL")
+        license_root = f"{dist_info_dir}/licenses/"
+        included_license_paths = {
+            name.removeprefix(license_root)
+            for name in names
+            if name.startswith(license_root)
+        }
+        missing_licenses = _REQUIRED_LICENSE_PATHS - included_license_paths
         if missing_licenses:
             missing = ", ".join(sorted(missing_licenses))
             raise ValueError(f"Wheel is missing required license files: {missing}")

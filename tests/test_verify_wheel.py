@@ -17,9 +17,9 @@ verify_wheel = _MODULE.verify_wheel
 _LICENSES = (
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "barcode-rest-MIT.txt",
-    "boombuler-barcode-MIT.txt",
-    "go-and-x-image-BSD-3-Clause.txt",
+    "licenses/barcode-rest-MIT.txt",
+    "licenses/boombuler-barcode-MIT.txt",
+    "licenses/go-and-x-image-BSD-3-Clause.txt",
 )
 
 
@@ -29,6 +29,7 @@ def _write_wheel(
     binary: str = "barcodekit/_bin/barcode-rest.exe",
     tag: str = "win_amd64",
     extra_binary: str | None = None,
+    license_root: str = "barcodekit-0.0.1.dist-info/licenses",
 ) -> None:
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(binary, b"binary")
@@ -40,7 +41,7 @@ def _write_wheel(
             f"Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-{tag}\n",
         )
         for name in _LICENSES:
-            archive.writestr(f"barcodekit-0.0.1.dist-info/licenses/{name}", b"license")
+            archive.writestr(f"{license_root}/{name}", b"license")
 
 
 def test_verify_wheel_accepts_one_matching_binary_and_licenses(tmp_path: Path) -> None:
@@ -66,4 +67,12 @@ def test_verify_wheel_rejects_wrong_platform_tag(tmp_path: Path) -> None:
     _write_wheel(wheel, tag="manylinux_2_34_x86_64")
 
     with pytest.raises(ValueError, match="platform tag win_amd64"):
+        verify_wheel(wheel, "windows-amd64")
+
+
+def test_verify_wheel_rejects_licenses_outside_dist_info(tmp_path: Path) -> None:
+    wheel = tmp_path / "barcodekit-0.0.1-py3-none-win_amd64.whl"
+    _write_wheel(wheel, license_root="misplaced/licenses")
+
+    with pytest.raises(ValueError, match="missing required license files"):
         verify_wheel(wheel, "windows-amd64")
