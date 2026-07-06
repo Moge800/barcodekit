@@ -83,7 +83,7 @@ other operating systems or CPU architectures.
 Supported bundled targets:
 
 - Windows amd64
-- Linux amd64 using glibc, including 64-bit Ubuntu
+- Linux amd64 using glibc 2.34 or newer, including Ubuntu 22.04 or newer
 - Linux arm64 using glibc, including 64-bit Ubuntu and 64-bit Raspberry Pi OS
 
 Unsupported targets:
@@ -97,6 +97,10 @@ Binary-free source distributions are not intended for release. On the
 supported operating systems and CPU architectures listed above, development
 from a source checkout remains supported with `BARCODEKIT_BINARY` or
 `BarcodeKit(executable=...)`.
+
+Release builds currently pin
+[`barcode-rest` v0.2.0](https://github.com/Moge800/barcode-rest/releases/tag/v0.2.0).
+The expected SHA-256 values are committed in `checksums/v0.2.0.sha256`.
 
 ## Supported symbologies
 
@@ -196,6 +200,26 @@ following before its wheel is retained:
 Do not upload Hatchling's initial `py3-none-any` wheel after inserting a binary;
 the release job must apply the verified platform tag first.
 
+## Releasing
+
+`.github/workflows/release.yml` builds these three platform wheels on native
+GitHub-hosted runners. For each target it:
+
+1. Downloads the pinned `barcode-rest` release asset.
+2. Verifies its committed SHA-256, reported version, and real PNG output.
+3. Builds and applies the target-specific wheel tag.
+4. Verifies that the wheel contains one matching binary, `py.typed`, and all
+   required license notices.
+
+A manual `workflow_dispatch` run builds wheel artifacts for inspection and
+never publishes them. Pull requests that change release inputs also build all
+three wheels without publishing. Pushing a tag that exactly matches
+`v<project.version>` builds the same wheels and publishes only those wheels
+through PyPI Trusted Publishing. The GitHub `pypi` environment and PyPI
+trusted publisher must be configured before the first release.
+
 ## License
 
-MIT
+`barcodekit` is MIT licensed. Platform wheels also include the notices and
+license texts listed in
+[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.0.1/THIRD_PARTY_NOTICES.md).
