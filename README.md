@@ -216,12 +216,15 @@ never publishes them. Pull requests that change release inputs also build all
 three wheels without publishing.
 
 Publishing a GitHub Release whose tag is `v<major>.<minor>.<patch>` first
-synchronizes `pyproject.toml`, `src/barcodekit/_version.py`, `uv.lock`, and the
-versioned notice links to that tag, then commits the metadata update to the
-default branch. All three wheels are built from that exact synchronized commit
-and published through PyPI Trusted Publishing. After PyPI succeeds, the wheels
-are also attached to the GitHub Release. Pushing a tag by itself does not
-publish the package.
+requires that tag to point exactly to the current default branch head. The
+workflow checks out the tag commit, synchronizes `pyproject.toml`,
+`src/barcodekit/_version.py`, `uv.lock`, and the versioned notice links, then
+commits the metadata update to the default branch as a fast-forward. All three
+wheels are built from that exact synchronized commit and published through
+PyPI Trusted Publishing. If the tag and default branch differ, the release
+stops before building anything. After PyPI succeeds, the wheels are also
+attached to the GitHub Release. Pushing a tag by itself does not publish the
+package.
 
 The GitHub `pypi` environment and PyPI trusted publisher must be configured
 before the first release.

@@ -213,11 +213,13 @@ wheelをビルドします。各対象環境で以下を実行します。
 をビルドします。
 
 `v<major>.<minor>.<patch>` tagのGitHub Releaseを公開すると、最初に
-`pyproject.toml`、`src/barcodekit/_version.py`、`uv.lock`、バージョン固定された
-通知リンクをそのtagへ同期し、metadata更新をdefault branchへcommitします。
-3種類すべてのwheelをその同期済みcommitからビルドし、PyPI Trusted Publishingで
-公開します。PyPIへの公開成功後、wheelをGitHub Releaseにも添付します。tagをpush
-するだけではpackageを公開しません。
+そのtagがdefault branchの現在HEADと完全に一致することを要求します。workflowは
+tag commitをcheckoutし、`pyproject.toml`、`src/barcodekit/_version.py`、`uv.lock`、
+バージョン固定された通知リンクを同期してから、metadata更新をfast-forwardとして
+default branchへcommitします。3種類すべてのwheelをその同期済みcommitからビルドし、
+PyPI Trusted Publishingで公開します。tagとdefault branchが異なる場合は、何も
+ビルドせずreleaseを停止します。PyPIへの公開成功後、wheelをGitHub Releaseにも
+添付します。tagをpushするだけではpackageを公開しません。
 
 初回リリース前に、GitHubの `pypi` environmentとPyPI trusted publisherの設定が
 必要です。
