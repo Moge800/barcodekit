@@ -1,15 +1,16 @@
 name: release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types:
+      - published
   pull_request:
     paths:
       - ".github/workflows/release.yml"
       - "checksums/**"
       - "licenses/**"
       - "scripts/prepare_binary.py"
+      - "scripts/sync_release_version.py"
       - "scripts/verify_wheel.py"
       - "src/**"
       - "THIRD_PARTY_NOTICES.md"
@@ -21,8 +22,63 @@ env:
   BARCODE_REST_VERSION: v0.2.0
 
 jobs:
+  prepare-source:
+    name: prepare release source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+
+    steps:
+      - name: Checkout default branch for release
+        if: github.event_name == 'release'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Checkout current revision
+        if: github.event_name != 'release'
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        if: github.event_name == 'release'
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Sync package version from release tag
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python scripts/sync_release_version.py --tag "${RELEASE_TAG}"
+          uv lock
+
+      - name: Commit synced package metadata
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          if git diff --quiet -- pyproject.toml uv.lock src/barcodekit/_version.py README.md README_JP.md; then
+            echo "Package metadata already matches the release tag."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pyproject.toml uv.lock src/barcodekit/_version.py README.md README_JP.md
+            git commit -m "chore: sync package version from release tag"
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+
+      - name: Select source commit
+        id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
   build-wheels:
     name: wheel (${{ matrix.target }})
+    needs: prepare-source
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -45,21 +101,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-source.outputs.sha }}
 
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
           enable-cache: true
-
-      - name: Check tag matches package version
-        if: github.ref_type == 'tag'
-        shell: bash
-        run: |
-          project_version="$(python -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text("utf-8"))["project"]["version"])')"
-          test "${GITHUB_REF_NAME}" = "v${project_version}" || {
-            echo "::error::tag ${GITHUB_REF_NAME} does not match package version ${project_version}"
-            exit 1
-          }
 
       - name: Install release tooling
         run: uv sync --frozen --extra release
@@ -120,7 +168,7 @@ jobs:
   publish:
     name: publish to PyPI
     needs: build-wheels
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -133,3 +181,23 @@ jobs:
           merge-multiple: true
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  github-release:
+    name: attach wheels to GitHub Release
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl

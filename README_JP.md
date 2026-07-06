@@ -210,9 +210,17 @@ wheelをビルドします。各対象環境で以下を実行します。
 
 手動の `workflow_dispatch` は確認用wheel artifactをビルドするだけで、公開は
 行いません。release関連ファイルを変更するpull requestでも、公開せずに3種類すべて
-をビルドします。`v<project.version>` と完全に一致するtagをpushすると、同じwheel
-をビルドし、PyPI Trusted Publishingでwheelだけを公開します。初回リリース前に、
-GitHubの `pypi` environmentとPyPI trusted publisherの設定が必要です。
+をビルドします。
+
+`v<major>.<minor>.<patch>` tagのGitHub Releaseを公開すると、最初に
+`pyproject.toml`、`src/barcodekit/_version.py`、`uv.lock`、バージョン固定された
+通知リンクをそのtagへ同期し、metadata更新をdefault branchへcommitします。
+3種類すべてのwheelをその同期済みcommitからビルドし、PyPI Trusted Publishingで
+公開します。PyPIへの公開成功後、wheelをGitHub Releaseにも添付します。tagをpush
+するだけではpackageを公開しません。
+
+初回リリース前に、GitHubの `pypi` environmentとPyPI trusted publisherの設定が
+必要です。
 
 ## ライセンス
 

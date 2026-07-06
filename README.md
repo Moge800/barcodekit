@@ -213,10 +213,18 @@ GitHub-hosted runners. For each target it:
 
 A manual `workflow_dispatch` run builds wheel artifacts for inspection and
 never publishes them. Pull requests that change release inputs also build all
-three wheels without publishing. Pushing a tag that exactly matches
-`v<project.version>` builds the same wheels and publishes only those wheels
-through PyPI Trusted Publishing. The GitHub `pypi` environment and PyPI
-trusted publisher must be configured before the first release.
+three wheels without publishing.
+
+Publishing a GitHub Release whose tag is `v<major>.<minor>.<patch>` first
+synchronizes `pyproject.toml`, `src/barcodekit/_version.py`, `uv.lock`, and the
+versioned notice links to that tag, then commits the metadata update to the
+default branch. All three wheels are built from that exact synchronized commit
+and published through PyPI Trusted Publishing. After PyPI succeeds, the wheels
+are also attached to the GitHub Release. Pushing a tag by itself does not
+publish the package.
+
+The GitHub `pypi` environment and PyPI trusted publisher must be configured
+before the first release.
 
 ## License
 
