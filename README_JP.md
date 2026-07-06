@@ -154,66 +154,6 @@ uv build
 `BARCODEKIT_BINARY` が設定されている場合、任意の統合テストで実際のData Matrix画像を
 生成し、PNG出力を確認します。
 
-## platform wheelの準備
-
-実際の実行ファイルは、このリポジトリへcommitしません。ビルド前に、信頼できる
-バイナリを1つだけpackageへコピーします。
-
-```bash
-uv run python scripts/prepare_binary.py \
-  --binary ./dist/barcode-rest.exe \
-  --target windows-amd64 \
-  --sha256 <trusted-sha256> \
-  --expected-version <pinned-version>
-
-uv run python scripts/prepare_binary.py \
-  --binary ./dist/barcode-rest-linux-amd64 \
-  --target linux-amd64 \
-  --sha256 <trusted-sha256> \
-  --expected-version <pinned-version>
-
-uv run python scripts/prepare_binary.py \
-  --binary ./dist/barcode-rest-linux-arm64 \
-  --target linux-arm64 \
-  --sha256 <trusted-sha256> \
-  --expected-version <pinned-version>
-```
-
-スクリプトは、checksumまたはバージョンが一致しないバイナリを拒否します。
-`--expected-version` を指定すると、ネイティブ環境でワンショットPNG生成の
-スモークテストも実行します。また、別のOS向けに残っている実行ファイルを削除し、
-対象platformで必要なファイル名へコピーします。Linux向けには実行権限も設定します。
-
-リリースビルドは対象アーキテクチャ上で実行し、wheelを採用する前に以下をすべて
-検証する必要があります。
-
-1. バイナリのSHA-256が、選択した上流 `barcode-rest` リリース用に固定された値と
-   一致すること
-2. `barcode-rest -version` が固定したリリースを返すこと
-3. ワンショットData Matrixコマンドが正常終了し、有効なPNGを返すこと
-4. wheelに実行ファイルが1つだけ含まれること
-5. wheelに正しいplatform tagが付いていること。Linux tagは、バイナリが実際に
-   必要とするglibcバージョンを反映すること
-
-バイナリを挿入した後、Hatchlingが最初に生成する `py3-none-any` wheelをそのまま
-uploadしてはいけません。リリースjobで、検証済みのplatform tagを先に適用します。
-
-## リリース
-
-`.github/workflows/release.yml` は、GitHub-hosted runner上で次の3種類のplatform
-wheelをビルドします。各対象環境で以下を実行します。
-
-1. 固定した `barcode-rest` release assetをダウンロード
-2. commit済みSHA-256、表示バージョン、実際のPNG出力を検証
-3. wheelをビルドし、対象固有のplatform tagを適用
-4. 対応バイナリが1つだけ含まれること、`py.typed`、必要なライセンス通知を検証
-
-手動の `workflow_dispatch` は確認用wheel artifactをビルドするだけで、公開は
-行いません。release関連ファイルを変更するpull requestでも、公開せずに3種類すべて
-をビルドします。`v<project.version>` と完全に一致するtagをpushすると、同じwheel
-をビルドし、PyPI Trusted Publishingでwheelだけを公開します。初回リリース前に、
-GitHubの `pypi` environmentとPyPI trusted publisherの設定が必要です。
-
 ## ライセンス
 
 `barcodekit` はMIT Licenseです。platform wheelには

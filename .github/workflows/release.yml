@@ -1,15 +1,16 @@
 name: release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types:
+      - published
   pull_request:
     paths:
       - ".github/workflows/release.yml"
       - "checksums/**"
       - "licenses/**"
       - "scripts/prepare_binary.py"
+      - "scripts/sync_release_version.py"
       - "scripts/verify_wheel.py"
       - "src/**"
       - "THIRD_PARTY_NOTICES.md"
@@ -21,8 +22,142 @@ env:
   BARCODE_REST_VERSION: v0.2.0
 
 jobs:
+  prepare-source:
+    name: prepare current source
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select source commit
+        id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+  prepare-release-source:
+    name: prepare release source
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Verify release lineage
+        id: lineage
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch origin "${DEFAULT_BRANCH}"
+          tagged_sha="$(git rev-parse HEAD)"
+          default_sha="$(git rev-parse "origin/${DEFAULT_BRANCH}")"
+
+          if [[ "${default_sha}" == "${tagged_sha}" ]]; then
+            mode="initial"
+          else
+            read -ra revision <<< "$(git rev-list --parents -n 1 "${default_sha}")"
+            if [[ ${#revision[@]} -ne 2 || "${revision[1]}" != "${tagged_sha}" ]]; then
+              echo "::error::release tag points to ${tagged_sha}, but ${DEFAULT_BRANCH} is ${default_sha}"
+              echo "::error::the branch must be at the tag or its verified metadata commit"
+              exit 1
+            fi
+            mode="existing"
+          fi
+
+          {
+            echo "mode=${mode}"
+            echo "default-sha=${default_sha}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Sync package version from release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          uv run --frozen python scripts/sync_release_version.py --tag "${RELEASE_TAG}"
+          uv lock
+
+      - name: Select synchronized source
+        id: source
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DEFAULT_SHA: ${{ steps.lineage.outputs.default-sha }}
+          MODE: ${{ steps.lineage.outputs.mode }}
+        run: |
+          metadata_files=(
+            pyproject.toml
+            uv.lock
+            src/barcodekit/_version.py
+            README.md
+            README_JP.md
+          )
+
+          if [[ "${MODE}" == "existing" ]]; then
+            if ! git diff --quiet "origin/${DEFAULT_BRANCH}" -- . ||
+               [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+              echo "::error::existing commit after the release tag is not the expected metadata sync"
+              exit 1
+            fi
+            echo "Reusing verified metadata commit ${DEFAULT_SHA}."
+            echo "sha=${DEFAULT_SHA}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          while IFS= read -r path; do
+            [[ -z "${path}" ]] && continue
+            allowed=false
+            for metadata_file in "${metadata_files[@]}"; do
+              if [[ "${path}" == "${metadata_file}" ]]; then
+                allowed=true
+                break
+              fi
+            done
+            if [[ "${allowed}" != true ]]; then
+              echo "::error::version sync unexpectedly changed ${path}"
+              exit 1
+            fi
+          done <<< "$(git diff --name-only)"
+
+          if git diff --quiet -- "${metadata_files[@]}"; then
+            echo "Package metadata already matches the release tag."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- "${metadata_files[@]}"
+            git commit -m "chore: sync package version from release tag"
+            git push origin "HEAD:${DEFAULT_BRANCH}"
+          fi
+
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
   build-wheels:
     name: wheel (${{ matrix.target }})
+    needs:
+      - prepare-source
+      - prepare-release-source
+    if: >-
+      always() &&
+      (needs.prepare-source.result == 'success' ||
+      needs.prepare-release-source.result == 'success')
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -45,21 +180,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: >-
+            ${{ needs.prepare-release-source.outputs.sha ||
+            needs.prepare-source.outputs.sha }}
 
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
           enable-cache: true
-
-      - name: Check tag matches package version
-        if: github.ref_type == 'tag'
-        shell: bash
-        run: |
-          project_version="$(python -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text("utf-8"))["project"]["version"])')"
-          test "${GITHUB_REF_NAME}" = "v${project_version}" || {
-            echo "::error::tag ${GITHUB_REF_NAME} does not match package version ${project_version}"
-            exit 1
-          }
 
       - name: Install release tooling
         run: uv sync --frozen --extra release
@@ -120,7 +249,7 @@ jobs:
   publish:
     name: publish to PyPI
     needs: build-wheels
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -133,3 +262,23 @@ jobs:
           merge-multiple: true
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  github-release:
+    name: attach wheels to GitHub Release
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
