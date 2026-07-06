@@ -160,4 +160,4 @@ Data Matrix image and checks its PNG output.
 
 `barcodekit` is MIT licensed. Platform wheels also include the notices and
 license texts listed in
-[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.1.1/THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.1.2/THIRD_PARTY_NOTICES.md).
