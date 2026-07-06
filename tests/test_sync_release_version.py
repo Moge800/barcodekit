@@ -8,7 +8,8 @@ import pytest
 
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "sync_release_version.py"
 _SPEC = importlib.util.spec_from_file_location("sync_release_version", _SCRIPT)
-assert _SPEC is not None and _SPEC.loader is not None
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError(f"Could not load release version sync script: {_SCRIPT}")
 _MODULE: Any = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 sync_release_version = _MODULE.sync_release_version

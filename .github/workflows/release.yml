@@ -92,7 +92,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          python scripts/sync_release_version.py --tag "${RELEASE_TAG}"
+          uv run --frozen python scripts/sync_release_version.py --tag "${RELEASE_TAG}"
           uv lock
 
       - name: Select synchronized source
