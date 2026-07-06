@@ -83,3 +83,54 @@ def test_verify_binary_checks_version_and_png(
 
     assert calls[0] == [str(source), "-version"]
     assert calls[1][1:3] == ["generate", "datamatrix"]
+
+
+def test_prepare_verifies_copied_binary(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "download" / "barcode-rest-linux-amd64"
+    source.parent.mkdir()
+    source.write_bytes(b"binary")
+    destination_dir = tmp_path / "package"
+    verified: list[Path] = []
+
+    def fake_verify(binary: Path, version: str, timeout: float = 10.0) -> None:
+        assert version == "v0.2.0"
+        verified.append(binary)
+
+    monkeypatch.setattr(_MODULE, "verify_binary", fake_verify)
+
+    result = prepare_binary(
+        source,
+        "linux-amd64",
+        expected_version="v0.2.0",
+        destination_dir=destination_dir,
+    )
+
+    assert verified == [result]
+    assert result == destination_dir / "barcode-rest"
+
+
+def test_failed_verification_removes_copied_binary(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "barcode-rest-linux-amd64"
+    source.write_bytes(b"binary")
+    destination_dir = tmp_path / "package"
+
+    def fake_verify(binary: Path, version: str, timeout: float = 10.0) -> None:
+        raise ValueError("wrong binary")
+
+    monkeypatch.setattr(_MODULE, "verify_binary", fake_verify)
+
+    with pytest.raises(ValueError, match="wrong binary"):
+        prepare_binary(
+            source,
+            "linux-amd64",
+            expected_version="v0.2.0",
+            destination_dir=destination_dir,
+        )
+
+    assert not (destination_dir / "barcode-rest").exists()

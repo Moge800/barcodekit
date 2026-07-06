@@ -83,7 +83,7 @@ BARCODEKIT_BINARY=/opt/barcode-rest uv run python example.py
 同梱バイナリの対応環境：
 
 - Windows amd64
-- glibcを使用するLinux amd64（64bit Ubuntuを含む）
+- glibc 2.34以降を使用するLinux amd64（Ubuntu 22.04以降を含む）
 - glibcを使用するLinux arm64（64bit Ubuntuおよび64bit Raspberry Pi OSを含む）
 
 非対応環境：
@@ -96,6 +96,10 @@ BARCODEKIT_BINARY=/opt/barcode-rest uv run python example.py
 バイナリを含まないsource distributionは、リリース対象にしません。上記の対応OSと
 CPUアーキテクチャでは、ソースcheckoutでも `BARCODEKIT_BINARY` または
 `BarcodeKit(executable=...)` を指定して開発できます。
+
+リリースビルドでは現在、
+[`barcode-rest` v0.2.0](https://github.com/Moge800/barcode-rest/releases/tag/v0.2.0)
+を固定して使用します。期待するSHA-256は `checksums/v0.2.0.sha256` にcommitします。
 
 ## 対応シンボル
 
@@ -194,6 +198,24 @@ uv run python scripts/prepare_binary.py \
 バイナリを挿入した後、Hatchlingが最初に生成する `py3-none-any` wheelをそのまま
 uploadしてはいけません。リリースjobで、検証済みのplatform tagを先に適用します。
 
+## リリース
+
+`.github/workflows/release.yml` は、GitHub-hosted runner上で次の3種類のplatform
+wheelをビルドします。各対象環境で以下を実行します。
+
+1. 固定した `barcode-rest` release assetをダウンロード
+2. commit済みSHA-256、表示バージョン、実際のPNG出力を検証
+3. wheelをビルドし、対象固有のplatform tagを適用
+4. 対応バイナリが1つだけ含まれること、`py.typed`、必要なライセンス通知を検証
+
+手動の `workflow_dispatch` は確認用wheel artifactをビルドするだけで、公開は
+行いません。release関連ファイルを変更するpull requestでも、公開せずに3種類すべて
+をビルドします。`v<project.version>` と完全に一致するtagをpushすると、同じwheel
+をビルドし、PyPI Trusted Publishingでwheelだけを公開します。初回リリース前に、
+GitHubの `pypi` environmentとPyPI trusted publisherの設定が必要です。
+
 ## ライセンス
 
-MIT
+`barcodekit` はMIT Licenseです。platform wheelには
+[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/main/THIRD_PARTY_NOTICES.md)
+に記載した通知とライセンス文も同梱します。

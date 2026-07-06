@@ -1,0 +1,135 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "checksums/**"
+      - "licenses/**"
+      - "scripts/prepare_binary.py"
+      - "scripts/verify_wheel.py"
+      - "src/**"
+      - "THIRD_PARTY_NOTICES.md"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+env:
+  BARCODE_REST_VERSION: v0.2.0
+
+jobs:
+  build-wheels:
+    name: wheel (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-amd64
+            asset: barcode-rest.exe
+            platform_tag: win_amd64
+          - os: ubuntu-latest
+            target: linux-amd64
+            asset: barcode-rest-linux-amd64
+            platform_tag: manylinux_2_34_x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+            asset: barcode-rest-linux-arm64
+            platform_tag: manylinux_2_17_aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Check tag matches package version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          project_version="$(python -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text("utf-8"))["project"]["version"])')"
+          test "${GITHUB_REF_NAME}" = "v${project_version}" || {
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package version ${project_version}"
+            exit 1
+          }
+
+      - name: Install release tooling
+        run: uv sync --frozen --extra release
+
+      - name: Download pinned barcode-rest binary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          mkdir -p vendor
+          gh release download "${BARCODE_REST_VERSION}" \
+            --repo Moge800/barcode-rest \
+            --pattern "${ASSET}" \
+            --dir vendor
+
+      - name: Verify and prepare binary
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          checksum="$(awk -v asset="${ASSET}" '$2 == asset { print $1 }' "checksums/${BARCODE_REST_VERSION}.sha256")"
+          test -n "${checksum}" || {
+            echo "::error::no checksum pinned for ${ASSET}"
+            exit 1
+          }
+          uv run --frozen python scripts/prepare_binary.py \
+            --binary "vendor/${ASSET}" \
+            --target "${TARGET}" \
+            --sha256 "${checksum}" \
+            --expected-version "${BARCODE_REST_VERSION}"
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Apply platform tag
+        shell: bash
+        env:
+          PLATFORM_TAG: ${{ matrix.platform_tag }}
+        run: |
+          uv run --frozen python -m wheel tags \
+            --platform-tag "${PLATFORM_TAG}" \
+            --remove dist/*.whl
+
+      - name: Verify wheel contents
+        run: >-
+          uv run --frozen python scripts/verify_wheel.py
+          --wheel-dir dist
+          --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: build-wheels
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

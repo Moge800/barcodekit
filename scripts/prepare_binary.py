@@ -116,9 +116,6 @@ def prepare_binary(
             f"SHA-256 mismatch for {source}: expected {expected_sha256.lower()}, "
             f"got {actual_sha256}"
         )
-    if expected_version is not None:
-        verify_binary(source, expected_version)
-
     destination_dir.mkdir(parents=True, exist_ok=True)
     filename = _TARGET_FILENAMES[target]
     destination = destination_dir / filename
@@ -132,6 +129,12 @@ def prepare_binary(
     if target.startswith("linux-"):
         mode = destination.stat().st_mode
         destination.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    if expected_version is not None:
+        try:
+            verify_binary(destination, expected_version)
+        except ValueError:
+            destination.unlink(missing_ok=True)
+            raise
     return destination
 
 
