@@ -249,7 +249,10 @@ jobs:
   publish:
     name: publish to PyPI
     needs: build-wheels
-    if: github.event_name == 'release'
+    if: >-
+      always() &&
+      github.event_name == 'release' &&
+      needs.build-wheels.result == 'success'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -268,7 +271,10 @@ jobs:
   github-release:
     name: attach wheels to GitHub Release
     needs: publish
-    if: github.event_name == 'release'
+    if: >-
+      always() &&
+      github.event_name == 'release' &&
+      needs.publish.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
