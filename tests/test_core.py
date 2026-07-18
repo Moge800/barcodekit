@@ -213,6 +213,62 @@ def test_barcodekit_factory_returns_engine() -> None:
     assert kit.timeout == 2
 
 
+def test_local_http_opener_disables_environment_proxies() -> None:
+    assert _core._LOCAL_PROXY_HANDLER.proxies == {}
+
+
+def test_server_start_cleans_up_after_keyboard_interrupt(monkeypatch: Any) -> None:
+    monkeypatch.setattr(_core, "resolve_binary", lambda executable: Path("barcode-rest"))
+    monkeypatch.setattr(_core, "_find_free_local_port", lambda: 54321)
+    monkeypatch.setattr(_core, "_generate_exit_token", lambda: "exit-token")
+    exit_requests: list[tuple[int, str]] = []
+
+    class FakeProcess:
+        returncode = None
+        waited = False
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def wait(self, timeout: float | None = None) -> int:
+            self.waited = True
+            self.returncode = 0
+            return 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    process = FakeProcess()
+
+    def interrupt_startup(self: BarcodeKit, command: list[str]) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(subprocess, "Popen", lambda command, **kwargs: process)
+    monkeypatch.setattr(BarcodeKit, "_wait_for_server", interrupt_startup)
+    monkeypatch.setattr(
+        _core,
+        "_request_server_exit",
+        lambda port, token, timeout: exit_requests.append((port, token)),
+    )
+
+    kit = BarcodeKit(server=True)
+    try:
+        kit.start()
+    except KeyboardInterrupt:
+        pass
+    else:
+        raise AssertionError("KeyboardInterrupt should be re-raised")
+
+    assert exit_requests == [(54321, "exit-token")]
+    assert process.waited is True
+    assert kit._server_process is None
+    assert kit._server_port is None
+    assert kit._server_exit_token is None
+
+
 def test_server_mode_starts_local_server_and_closes(
     monkeypatch: Any,
     png_bytes: bytes,
@@ -274,7 +330,7 @@ def test_server_mode_starts_local_server_and_closes(
         return FakeResponse(png_bytes)
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(_core, "urlopen", fake_urlopen)
+    monkeypatch.setattr(_core, "_open_local", fake_urlopen)
 
     with BarcodeKit(server=True, timeout=3) as kit:
         image = kit.qr("ABC 123", size=256, level="H")
@@ -336,7 +392,7 @@ def test_server_mode_restarts_an_exited_process(
             return b'{"ok":true}'
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(_core, "urlopen", lambda request, timeout: FakeResponse())
+    monkeypatch.setattr(_core, "_open_local", lambda request, timeout: FakeResponse())
 
     kit = BarcodeKit(server=True)
     kit.start()

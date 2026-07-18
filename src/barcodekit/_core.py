@@ -17,7 +17,7 @@ from types import TracebackType
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from ._binary import resolve_binary
 from ._errors import (
@@ -28,6 +28,8 @@ from ._errors import (
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _LOCALHOST = "127.0.0.1"
+_LOCAL_PROXY_HANDLER = ProxyHandler({})
+_LOCAL_OPENER = build_opener(_LOCAL_PROXY_HANDLER)
 _TWO_DIMENSIONAL_LIMITS = {
     "datamatrix": 3116,
     "qr": 7089,
@@ -366,7 +368,7 @@ class BarcodeKit:
         self._server_exit_token = exit_token
         try:
             self._wait_for_server(command)
-        except Exception:
+        except BaseException:
             self.close()
             raise
 
@@ -473,7 +475,7 @@ class BarcodeKit:
         url = f"http://{_LOCALHOST}:{self._server_port}/{symbology}?{urlencode(query)}"
         command = _server_display_command(symbology, validated_options)
         try:
-            with urlopen(url, timeout=self.timeout) as response:
+            with _open_local(url, timeout=self.timeout) as response:
                 data = response.read()
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -505,7 +507,7 @@ class BarcodeKit:
                     "barcode-rest server exited before it became ready",
                 )
             try:
-                with urlopen(url, timeout=min(0.2, self.timeout)):
+                with _open_local(url, timeout=min(0.2, self.timeout)):
                     return
             except (OSError, URLError):
                 time.sleep(0.05)
@@ -683,12 +685,17 @@ def _generate_exit_token() -> str:
     return secrets.token_hex(16)
 
 
+def _open_local(request: str | Request, timeout: float) -> Any:
+    """Open a localhost request without consulting environment proxies."""
+    return _LOCAL_OPENER.open(request, timeout=timeout)
+
+
 def _request_server_exit(port: int, exit_token: str, timeout: float) -> None:
     query = urlencode({"token": exit_token})
     url = f"http://{_LOCALHOST}:{port}/exit?{query}"
     request = Request(url, method="POST")
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with _open_local(request, timeout=timeout) as response:
             response.read()
     except (HTTPError, TimeoutError, URLError, OSError):
         return
