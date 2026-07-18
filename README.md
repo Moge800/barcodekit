@@ -90,6 +90,22 @@ with barcodekit(server=True) as kit:
         image.save(f"qr-{index:06d}.png")
 ```
 
+Fully consuming the iterator releases its worker pool automatically. If you
+may stop early, close the iterator explicitly; `contextlib.closing()` does so
+even when the loop exits with `break` or an exception:
+
+```python
+from contextlib import closing
+
+with barcodekit(server=True) as kit:
+    images = kit.imap("qr", values, workers=8, size=256, level="M")
+    with closing(images):
+        for index, image in enumerate(images):
+            image.save(f"qr-{index:06d}.png")
+            if index + 1 >= 100:
+                break
+```
+
 Parallel generation requires `server=True`. If `workers` is omitted,
 barcodekit uses the detected CPU count, capped at 8. More workers are not
 always faster, so benchmark the intended barcode type and host. If an item

@@ -89,6 +89,22 @@ with barcodekit(server=True) as kit:
         image.save(f"qr-{index:06d}.png")
 ```
 
+iteratorを最後まで処理すれば、worker poolは自動的に解放されます。途中で処理を
+打ち切る可能性がある場合は、iteratorを明示的にcloseしてください。
+`contextlib.closing()` を使うと、`break` や例外でloopを抜けた場合もcloseできます。
+
+```python
+from contextlib import closing
+
+with barcodekit(server=True) as kit:
+    images = kit.imap("qr", values, workers=8, size=256, level="M")
+    with closing(images):
+        for index, image in enumerate(images):
+            image.save(f"qr-{index:06d}.png")
+            if index + 1 >= 100:
+                break
+```
+
 並列生成には `server=True` が必要です。`workers` を省略した場合は、検出したCPU数を
 最大8として使用します。worker数を増やせば常に速くなるわけではないため、実際に使う
 バーコード形式と環境でbenchmarkを取ってください。個別の生成に失敗した場合は、
