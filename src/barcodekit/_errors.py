@@ -36,6 +36,15 @@ class BarcodeKitUnsupportedPlatform(BarcodeKitError):
     """Raised when barcodekit does not support the current platform."""
 
 
+class BarcodeKitBatchError(BarcodeKitError):
+    """Raised when one item in a batch cannot be generated."""
+
+    def __init__(self, index: int, error: Exception) -> None:
+        self.index = index
+        self.error = error
+        super().__init__(f"barcode generation failed at input index {index}: {error}")
+
+
 class BarcodeKitCommandError(BarcodeKitError):
     """Raised when barcode-rest fails or returns unusable output."""
 

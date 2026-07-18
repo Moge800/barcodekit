@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 import secrets
 import socket
 import subprocess
 import time
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Generator, Iterable, Iterator, Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from importlib import import_module
 from io import BytesIO
 from pathlib import Path
+from threading import Condition
 from types import TracebackType
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -21,6 +25,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from ._binary import resolve_binary
 from ._errors import (
+    BarcodeKitBatchError,
     BarcodeKitBinaryNotFound,
     BarcodeKitCommandError,
     BarcodeKitTimeout,
@@ -30,6 +35,7 @@ _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _LOCALHOST = "127.0.0.1"
 _LOCAL_PROXY_HANDLER = ProxyHandler({})
 _LOCAL_OPENER = build_opener(_LOCAL_PROXY_HANDLER)
+_MAX_DEFAULT_WORKERS = 8
 _TWO_DIMENSIONAL_LIMITS = {
     "datamatrix": 3116,
     "qr": 7089,
@@ -128,6 +134,16 @@ def _validate_bool(value: object, name: str) -> bool:
     if type(value) is not bool:
         raise TypeError(f"{name} must be a boolean")
     return value
+
+
+def _validate_workers(workers: int | None) -> int:
+    if workers is None:
+        return min(_MAX_DEFAULT_WORKERS, max(1, os.cpu_count() or 1))
+    if type(workers) is not int:
+        raise TypeError("workers must be an integer or None")
+    if workers < 1:
+        raise ValueError("workers must be greater than zero")
+    return workers
 
 
 def _validate_qr_level(value: object) -> str:
@@ -319,6 +335,8 @@ class BarcodeKit:
         self._server_process: subprocess.Popen[bytes] | None = None
         self._server_port: int | None = None
         self._server_exit_token: str | None = None
+        self._server_condition = Condition()
+        self._active_server_requests = 0
 
     def __enter__(self) -> BarcodeKit:
         if self.server:
@@ -335,6 +353,10 @@ class BarcodeKit:
 
     def start(self) -> None:
         """Start the local barcode-rest server when server mode is enabled."""
+        with self._server_condition:
+            self._start_server_locked()
+
+    def _start_server_locked(self) -> None:
         if not self.server:
             return
         if self._server_process is not None:
@@ -369,11 +391,17 @@ class BarcodeKit:
         try:
             self._wait_for_server(command)
         except BaseException:
-            self.close()
+            self._close_server_locked()
             raise
 
     def close(self) -> None:
         """Stop a barcode-rest server started by this instance."""
+        with self._server_condition:
+            while self._active_server_requests:
+                self._server_condition.wait()
+            self._close_server_locked()
+
+    def _close_server_locked(self) -> None:
         process = self._server_process
         port = self._server_port
         exit_token = self._server_exit_token
@@ -397,6 +425,111 @@ class BarcodeKit:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=2.0)
+
+    def generate_many(
+        self,
+        symbology: str,
+        texts: Iterable[str],
+        *,
+        workers: int | None = None,
+        **options: object,
+    ) -> list[BarcodeImage]:
+        """Generate a batch concurrently and return images in input order."""
+        return list(self.imap(symbology, texts, workers=workers, **options))
+
+    def imap(
+        self,
+        symbology: str,
+        texts: Iterable[str],
+        *,
+        workers: int | None = None,
+        **options: object,
+    ) -> Generator[BarcodeImage, None, None]:
+        """Generate a bounded batch concurrently, preserving input order."""
+        if not self.server:
+            raise ValueError("parallel generation requires BarcodeKit(server=True)")
+        if not isinstance(symbology, str):
+            raise TypeError("symbology must be a string")
+        if symbology not in _SUPPORTED_SYMBOLOGIES:
+            raise ValueError(f"Unsupported symbology: {symbology}")
+
+        validated_options = _validate_options(symbology, options)
+        worker_count = _validate_workers(workers)
+        return self._imap_validated(
+            symbology,
+            iter(texts),
+            validated_options,
+            worker_count,
+        )
+
+    def _imap_validated(
+        self,
+        symbology: str,
+        texts: Iterator[str],
+        validated_options: Mapping[str, object],
+        workers: int,
+    ) -> Generator[BarcodeImage, None, None]:
+        try:
+            first_text = next(texts)
+        except StopIteration:
+            return
+
+        self.start()
+        executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="barcodekit")
+        pending: deque[tuple[int, Future[BarcodeImage]]] = deque()
+        next_index = 0
+
+        def submit_next() -> bool:
+            nonlocal next_index
+            try:
+                text = next(texts)
+            except StopIteration:
+                return False
+            future = executor.submit(
+                self._generate_batch_item,
+                symbology,
+                text,
+                validated_options,
+            )
+            pending.append((next_index, future))
+            next_index += 1
+            return True
+
+        try:
+            first_future = executor.submit(
+                self._generate_batch_item,
+                symbology,
+                first_text,
+                validated_options,
+            )
+            pending.append((next_index, first_future))
+            next_index += 1
+
+            for _ in range(workers * 2 - 1):
+                if not submit_next():
+                    break
+
+            while pending:
+                index, future = pending.popleft()
+                try:
+                    image = future.result()
+                except Exception as exc:
+                    raise BarcodeKitBatchError(index, exc) from exc
+                yield image
+                submit_next()
+        finally:
+            for _, future in pending:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+
+    def _generate_batch_item(
+        self,
+        symbology: str,
+        text: str,
+        validated_options: Mapping[str, object],
+    ) -> BarcodeImage:
+        _validate_text(symbology, text, validated_options)
+        return self._generate_with_server(symbology, text, validated_options)
 
     def generate(self, symbology: str, text: str, **options: object) -> BarcodeImage:
         """Generate a barcode using a supported symbology."""
@@ -461,10 +594,33 @@ class BarcodeKit:
         text: str,
         validated_options: Mapping[str, object],
     ) -> BarcodeImage:
-        self.start()
-        if self._server_port is None:
-            raise BarcodeKitCommandError(None, ("barcode-rest", "-port"), "server did not start")
+        port = self._acquire_server_request()
+        try:
+            return self._request_server_image(port, symbology, text, validated_options)
+        finally:
+            with self._server_condition:
+                self._active_server_requests -= 1
+                self._server_condition.notify_all()
 
+    def _acquire_server_request(self) -> int:
+        with self._server_condition:
+            self._start_server_locked()
+            if self._server_port is None:
+                raise BarcodeKitCommandError(
+                    None,
+                    ("barcode-rest", "-port"),
+                    "server did not start",
+                )
+            self._active_server_requests += 1
+            return self._server_port
+
+    def _request_server_image(
+        self,
+        port: int,
+        symbology: str,
+        text: str,
+        validated_options: Mapping[str, object],
+    ) -> BarcodeImage:
         query: dict[str, str] = {"text": text}
         for name, value in validated_options.items():
             if isinstance(value, bool):
@@ -472,7 +628,7 @@ class BarcodeKit:
             else:
                 query[name] = str(value)
 
-        url = f"http://{_LOCALHOST}:{self._server_port}/{symbology}?{urlencode(query)}"
+        url = f"http://{_LOCALHOST}:{port}/{symbology}?{urlencode(query)}"
         command = _server_display_command(symbology, validated_options)
         try:
             with _open_local(url, timeout=self.timeout) as response:

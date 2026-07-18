@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any
 
+import pytest
+
 import barcodekit
-from barcodekit import BarcodeImage, BarcodeKit, _core
+from barcodekit import BarcodeImage, BarcodeKit, BarcodeKitBatchError, _core
 
 
 def test_barcode_image_to_bytes(png_bytes: bytes) -> None:
@@ -211,6 +215,170 @@ def test_barcodekit_factory_returns_engine() -> None:
     assert isinstance(kit, BarcodeKit)
     assert kit.server is True
     assert kit.timeout == 2
+
+
+def test_generate_many_requires_server_mode() -> None:
+    with pytest.raises(ValueError, match="server=True"):
+        BarcodeKit().generate_many("qr", ["A"])
+
+
+@pytest.mark.parametrize("workers", [0, -1])
+def test_generate_many_rejects_non_positive_workers(workers: int) -> None:
+    with pytest.raises(ValueError, match="greater than zero"):
+        BarcodeKit(server=True).generate_many("qr", ["A"], workers=workers)
+
+
+@pytest.mark.parametrize("workers", [True, 1.5, "2"])
+def test_generate_many_rejects_non_integer_workers(workers: Any) -> None:
+    with pytest.raises(TypeError, match="integer or None"):
+        BarcodeKit(server=True).generate_many("qr", ["A"], workers=workers)
+
+
+def test_generate_many_does_not_start_server_for_empty_input(monkeypatch: Any) -> None:
+    kit = BarcodeKit(server=True)
+
+    def fail_start() -> None:
+        raise AssertionError("server should not start")
+
+    monkeypatch.setattr(kit, "start", fail_start)
+
+    assert kit.generate_many("qr", [], workers=2) == []
+
+
+def test_generate_many_preserves_input_order(
+    monkeypatch: Any,
+    png_bytes: bytes,
+) -> None:
+    kit = BarcodeKit(server=True)
+    monkeypatch.setattr(kit, "start", lambda: None)
+
+    def fake_generate(
+        symbology: str,
+        text: str,
+        options: object,
+    ) -> BarcodeImage:
+        time.sleep({"ITEM-0": 0.03, "ITEM-1": 0.01, "ITEM-2": 0.0}[text])
+        return BarcodeImage(png_bytes + text.encode("ascii"))
+
+    monkeypatch.setattr(kit, "_generate_batch_item", fake_generate)
+
+    images = kit.generate_many(
+        "datamatrix",
+        ["ITEM-0", "ITEM-1", "ITEM-2"],
+        workers=3,
+        size=256,
+    )
+
+    assert [image.to_bytes().removeprefix(png_bytes) for image in images] == [
+        b"ITEM-0",
+        b"ITEM-1",
+        b"ITEM-2",
+    ]
+
+
+def test_imap_bounds_input_consumption(
+    monkeypatch: Any,
+    png_bytes: bytes,
+) -> None:
+    kit = BarcodeKit(server=True)
+    monkeypatch.setattr(kit, "start", lambda: None)
+    monkeypatch.setattr(
+        kit,
+        "_generate_batch_item",
+        lambda symbology, text, options: BarcodeImage(png_bytes),
+    )
+    consumed = 0
+
+    def texts() -> Any:
+        nonlocal consumed
+        for index in range(100):
+            consumed += 1
+            yield f"ITEM-{index}"
+
+    images = kit.imap("datamatrix", texts(), workers=2, size=256)
+
+    assert consumed == 0
+    next(images)
+    assert consumed == 4
+    images.close()
+
+
+def test_generate_many_reports_failing_input_index(
+    monkeypatch: Any,
+    png_bytes: bytes,
+) -> None:
+    kit = BarcodeKit(server=True)
+    monkeypatch.setattr(kit, "start", lambda: None)
+
+    def fake_generate(
+        symbology: str,
+        text: str,
+        options: object,
+    ) -> BarcodeImage:
+        if text == "bad":
+            raise ValueError("invalid test value")
+        return BarcodeImage(png_bytes)
+
+    monkeypatch.setattr(kit, "_generate_batch_item", fake_generate)
+
+    with pytest.raises(BarcodeKitBatchError) as captured:
+        kit.generate_many("datamatrix", ["good", "bad", "later"], workers=2)
+
+    assert captured.value.index == 1
+    assert isinstance(captured.value.error, ValueError)
+    assert "good" not in str(captured.value)
+    assert "bad" not in str(captured.value)
+
+
+def test_close_waits_for_active_server_request(
+    monkeypatch: Any,
+    png_bytes: bytes,
+) -> None:
+    kit = BarcodeKit(server=True)
+    request_started = Event()
+    allow_request_to_finish = Event()
+    close_called = Event()
+    close_finished = Event()
+    images: list[BarcodeImage] = []
+
+    def fake_start() -> None:
+        kit._server_port = 54321
+
+    def fake_request(
+        port: int,
+        symbology: str,
+        text: str,
+        options: object,
+    ) -> BarcodeImage:
+        request_started.set()
+        allow_request_to_finish.wait(timeout=2)
+        return BarcodeImage(png_bytes)
+
+    def generate() -> None:
+        images.append(kit.qr("ABC", size=256))
+
+    def close() -> None:
+        close_called.set()
+        kit.close()
+        close_finished.set()
+
+    monkeypatch.setattr(kit, "_start_server_locked", fake_start)
+    monkeypatch.setattr(kit, "_request_server_image", fake_request)
+    generate_thread = Thread(target=generate)
+    close_thread = Thread(target=close)
+
+    generate_thread.start()
+    assert request_started.wait(timeout=2)
+    close_thread.start()
+    assert close_called.wait(timeout=2)
+    assert close_finished.wait(timeout=0.05) is False
+
+    allow_request_to_finish.set()
+    generate_thread.join(timeout=2)
+    close_thread.join(timeout=2)
+
+    assert images == [BarcodeImage(png_bytes)]
+    assert close_finished.is_set()
 
 
 def test_local_http_opener_disables_environment_proxies() -> None:
