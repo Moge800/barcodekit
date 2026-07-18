@@ -265,5 +265,5 @@ CIの合否条件には使用しません。
 ## ライセンス
 
 `barcodekit` は Apache License 2.0 でライセンスされています。platform wheelには
-[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.1.2/THIRD_PARTY_NOTICES.md)
+[THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.2.0/THIRD_PARTY_NOTICES.md)
 に記載した通知とライセンス文も同梱します。
