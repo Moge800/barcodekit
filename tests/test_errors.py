@@ -101,3 +101,20 @@ def test_command_display_preserves_argument_boundaries_and_redacts_text() -> Non
         '"C:/Program Files/barcode-rest.exe"' in display
         or "'C:/Program Files/barcode-rest.exe'" in display
     )
+
+
+def test_command_display_redacts_exit_token() -> None:
+    secret = "server-exit-token"
+
+    display = _errors._display_command(
+        [
+            "barcode-rest",
+            "-port",
+            "54321",
+            "-exit-token",
+            secret,
+        ]
+    )
+
+    assert secret not in display
+    assert "<redacted>" in display

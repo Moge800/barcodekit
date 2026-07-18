@@ -8,6 +8,8 @@ on:
     paths:
       - ".github/workflows/release.yml"
       - "checksums/**"
+      - "LICENSE"
+      - "NOTICE"
       - "licenses/**"
       - "scripts/prepare_binary.py"
       - "scripts/sync_release_version.py"
@@ -19,7 +21,7 @@ on:
   workflow_dispatch:
 
 env:
-  BARCODE_REST_VERSION: v0.2.0
+  BARCODE_REST_VERSION: v0.3.0
 
 jobs:
   prepare-source:
@@ -177,6 +179,14 @@ jobs:
             target: linux-arm64
             asset: barcode-rest-linux-arm64
             platform_tag: manylinux_2_17_aarch64
+          - os: macos-15-intel
+            target: darwin-amd64
+            asset: barcode-rest-darwin-amd64
+            platform_tag: macosx_12_0_x86_64
+          - os: macos-15
+            target: darwin-arm64
+            asset: barcode-rest-darwin-arm64
+            platform_tag: macosx_12_0_arm64
 
     steps:
       - uses: actions/checkout@v4

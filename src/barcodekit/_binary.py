@@ -21,6 +21,8 @@ _SUPPORTED_PLATFORMS = {
     ("windows", "amd64"): "barcode-rest.exe",
     ("linux", "amd64"): "barcode-rest",
     ("linux", "arm64"): "barcode-rest",
+    ("darwin", "amd64"): "barcode-rest",
+    ("darwin", "arm64"): "barcode-rest",
 }
 
 
@@ -82,4 +84,3 @@ def resolve_binary(executable: str | Path | None = None) -> Path:
         )
     _ensure_bundled_executable(bundled, system)
     return bundled
-

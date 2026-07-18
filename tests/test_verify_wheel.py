@@ -16,8 +16,8 @@ verify_wheel = _MODULE.verify_wheel
 
 _LICENSES = (
     "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
-    "licenses/barcode-rest-MIT.txt",
     "licenses/boombuler-barcode-MIT.txt",
     "licenses/go-and-x-image-BSD-3-Clause.txt",
 )
@@ -49,6 +49,24 @@ def test_verify_wheel_accepts_one_matching_binary_and_licenses(tmp_path: Path) -
     _write_wheel(wheel)
 
     verify_wheel(wheel, "windows-amd64")
+
+
+@pytest.mark.parametrize(
+    ("target", "tag"),
+    [
+        ("darwin-amd64", "macosx_12_0_x86_64"),
+        ("darwin-arm64", "macosx_12_0_arm64"),
+    ],
+)
+def test_verify_wheel_accepts_macos_targets(
+    target: str,
+    tag: str,
+    tmp_path: Path,
+) -> None:
+    wheel = tmp_path / f"barcodekit-0.0.1-py3-none-{tag}.whl"
+    _write_wheel(wheel, binary="barcodekit/_bin/barcode-rest", tag=tag)
+
+    verify_wheel(wheel, target)
 
 
 def test_verify_wheel_rejects_binary_for_another_platform(tmp_path: Path) -> None:
