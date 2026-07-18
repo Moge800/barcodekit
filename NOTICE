@@ -1,0 +1,26 @@
+barcodekit
+Copyright 2026 Moge800
+
+This product includes the barcode-rest executable and other third-party
+components described in THIRD_PARTY_NOTICES.md.
+
+barcode-rest
+Copyright 2026 Moge800
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+Releases up to and including v0.2.x were distributed under the MIT License.
+Releases v0.3.0 and later are distributed under the Apache License, Version 2.0.
+
+barcode-rest includes third-party software under their respective licenses:
+
+- github.com/boombuler/barcode
+  Barcode/QR/DataMatrix encoding.
+  MIT License. Copyright (c) 2014 Florian Sundermann.
+
+- golang.org/x/image
+  Bitmap font used for human-readable 1D barcode labels.
+  BSD 3-Clause License. Copyright (c) 2009 The Go Authors.
+
+- The Go standard library and runtime.
+  BSD 3-Clause License. Copyright (c) 2009 The Go Authors.

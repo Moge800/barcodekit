@@ -6,14 +6,20 @@
 [`barcode-rest`](https://github.com/Moge800/barcode-rest) executable in its
 one-shot CLI mode.
 
-Despite the upstream executable's name, **barcodekit does not start the REST
-server and does not use HTTP**. Each operation runs only:
+Despite the upstream executable's name, barcodekit's default mode **does not
+start the REST server and does not use HTTP**. Each default-mode operation runs
+only:
 
 ```text
 barcode-rest generate <symbology> --text <text> --output -
 ```
 
 PNG bytes are read from standard output and returned directly to Python.
+
+For bulk generation, `BarcodeKit(server=True)` can opt in to a local resident
+server. This starts the bundled `barcode-rest` process on `127.0.0.1` for the
+life of the context manager, passes a generated `-exit-token`, and sends
+requests to that local process only.
 
 ## Quick start
 
@@ -39,12 +45,53 @@ raw_png = image.to_bytes()
 image.save("dm.png")
 ```
 
+For many images, use server mode to avoid starting a new process for every
+barcode:
+
+```python
+from barcodekit import barcodekit
+
+with barcodekit(server=True) as kit:
+    for index in range(1000):
+        kit.datamatrix(f"ITEM-{index:04d}", size=256).save(f"dm-{index:04d}.png")
+```
+
+The class form is equivalent:
+
+```python
+from barcodekit import BarcodeKit
+
+with BarcodeKit(server=True) as kit:
+    image = kit.qr("https://example.com")
+```
+
 For `datamatrix`, `qr`, and `aztec`, `size` and `module` are mutually exclusive.
 Set `size=None` when selecting the module size directly:
 
 ```python
 datamatrix("ABC123", size=None, module=8)
 ```
+
+## Using the PNG with Pillow or OpenCV
+
+`barcodekit` does not depend on Pillow, OpenCV, or NumPy. If your application
+already uses those libraries, optional helpers can convert the returned PNG
+bytes:
+
+```python
+from barcodekit import qr
+
+pil_image = qr("ABC123").to_pillow()
+```
+
+```python
+from barcodekit import qr
+
+cv_image = qr("ABC123").to_cv2()
+```
+
+`to_pillow()` requires Pillow at call time. `to_cv2()` requires OpenCV and
+NumPy at call time. These packages are not installed by barcodekit.
 
 ## Executable resolution
 
@@ -85,10 +132,11 @@ Supported bundled targets:
 - Windows amd64
 - Linux amd64 using glibc 2.34 or newer, including Ubuntu 22.04 or newer
 - Linux arm64 using glibc, including 64-bit Ubuntu and 64-bit Raspberry Pi OS
+- macOS 12 or newer on Intel Macs
+- macOS 12 or newer on Apple Silicon Macs
 
 Unsupported targets:
 
-- macOS
 - Windows arm64
 - 32-bit Linux and 32-bit Raspberry Pi OS
 - musl-based Linux distributions such as Alpine Linux
@@ -99,8 +147,8 @@ from a source checkout remains supported with `BARCODEKIT_BINARY` or
 `BarcodeKit(executable=...)`.
 
 Release builds currently pin
-[`barcode-rest` v0.2.0](https://github.com/Moge800/barcode-rest/releases/tag/v0.2.0).
-The expected SHA-256 values are committed in `checksums/v0.2.0.sha256`.
+[`barcode-rest` v0.3.0](https://github.com/Moge800/barcode-rest/releases/tag/v0.3.0).
+The expected SHA-256 values are committed in `checksums/v0.3.0.sha256`.
 
 ## Supported symbologies
 
@@ -130,17 +178,24 @@ constraints that depend on the generated symbol remain the responsibility of
 ## Security and privacy
 
 - No executable or other data is downloaded at runtime.
-- No server is started.
-- The REST API and HTTP are not used.
+- By default, no server is started and the REST API / HTTP are not used.
+- `server=True` starts a local `barcode-rest` process bound to `127.0.0.1` and
+  uses HTTP only between Python and that local process.
+- In server mode, barcodekit starts `barcode-rest` with a generated
+  `-exit-token` and uses it only for `POST /exit` when the context manager is
+  closed.
 - No outbound network connection is made by the wrapper.
 - Barcode text is passed only to the local `barcode-rest` executable.
 - The wrapper does not log barcode text.
 - Commands shown by wrapper exceptions replace the value after `--text` with
   `<redacted>`. Matching text returned on stderr is also redacted.
 
-The text is necessarily passed through the local process command line because
-that is the upstream CLI interface. It may therefore be temporarily visible to
-users or tools with permission to inspect local process arguments.
+In default CLI mode, the text is necessarily passed through the local process
+command line because that is the upstream CLI interface. It may therefore be
+temporarily visible to users or tools with permission to inspect local process
+arguments. In `server=True` mode, the text is sent in HTTP query strings only to
+the local `127.0.0.1` process; barcode-rest logs paths only and does not log
+query values.
 
 ## Development with uv
 
@@ -158,6 +213,6 @@ Data Matrix image and checks its PNG output.
 
 ## License
 
-`barcodekit` is MIT licensed. Platform wheels also include the notices and
-license texts listed in
+`barcodekit` is licensed under the Apache License 2.0. Platform wheels also
+include the notices and license texts listed in
 [THIRD_PARTY_NOTICES.md](https://github.com/Moge800/barcodekit/blob/v0.1.2/THIRD_PARTY_NOTICES.md).

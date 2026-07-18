@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ._core import BarcodeImage, BarcodeKit
 from ._errors import (
     BarcodeKitBinaryNotFound,
@@ -13,6 +15,15 @@ from ._errors import (
 from ._version import __version__
 
 _default_kit = BarcodeKit()
+
+
+def barcodekit(
+    *,
+    executable: str | Path | None = None,
+    timeout: float = 10.0,
+    server: bool = False,
+) -> BarcodeKit:
+    return BarcodeKit(executable=executable, timeout=timeout, server=server)
 
 
 def generate(symbology: str, text: str, **options: object) -> BarcodeImage:
@@ -186,6 +197,7 @@ __all__ = [
     "BarcodeKitUnsupportedPlatform",
     "__version__",
     "aztec",
+    "barcodekit",
     "codabar",
     "code25",
     "code39",

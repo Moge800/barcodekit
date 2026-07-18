@@ -9,10 +9,10 @@ from collections.abc import Sequence
 
 
 def _redact_command(command: Sequence[str]) -> tuple[str, ...]:
-    """Return command arguments with the barcode text removed."""
+    """Return command arguments with sensitive values removed."""
     redacted = list(command)
     for index, argument in enumerate(redacted[:-1]):
-        if argument == "--text":
+        if argument in {"--text", "-exit-token"}:
             redacted[index + 1] = "<redacted>"
     return tuple(redacted)
 

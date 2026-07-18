@@ -10,11 +10,13 @@ _TARGETS = {
     "windows-amd64": ("barcodekit/_bin/barcode-rest.exe", "win_amd64"),
     "linux-amd64": ("barcodekit/_bin/barcode-rest", "manylinux_2_34_x86_64"),
     "linux-arm64": ("barcodekit/_bin/barcode-rest", "manylinux_2_17_aarch64"),
+    "darwin-amd64": ("barcodekit/_bin/barcode-rest", "macosx_12_0_x86_64"),
+    "darwin-arm64": ("barcodekit/_bin/barcode-rest", "macosx_12_0_arm64"),
 }
 _REQUIRED_LICENSE_PATHS = {
     "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
-    "licenses/barcode-rest-MIT.txt",
     "licenses/boombuler-barcode-MIT.txt",
     "licenses/go-and-x-image-BSD-3-Clause.txt",
 }

@@ -58,10 +58,27 @@ def test_unsupported_platform_rejects_even_explicit_binary(
 ) -> None:
     binary = tmp_path / "barcode-rest"
     binary.write_bytes(b"binary")
-    monkeypatch.setattr(_binary, "_current_platform", lambda: ("darwin", "arm64"))
+    monkeypatch.setattr(_binary, "_current_platform", lambda: ("freebsd", "amd64"))
 
     with pytest.raises(BarcodeKitUnsupportedPlatform):
         _binary.resolve_binary(binary)
+
+
+@pytest.mark.parametrize("machine", ["amd64", "arm64"])
+def test_macos_resolves_bundled_binary(
+    monkeypatch: Any,
+    tmp_path: Path,
+    machine: str,
+) -> None:
+    binary = tmp_path / "barcode-rest"
+    binary.write_bytes(b"binary")
+    monkeypatch.setattr(_binary, "_current_platform", lambda: ("darwin", machine))
+    monkeypatch.setattr(_binary, "_BINARY_DIR", tmp_path)
+    monkeypatch.delenv("BARCODEKIT_BINARY", raising=False)
+
+    assert _binary.resolve_binary() == binary
+    if os.name != "nt":
+        assert binary.stat().st_mode & stat.S_IXUSR
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are required")

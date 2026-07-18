@@ -10,8 +10,10 @@ from barcodekit import BarcodeKit
 @pytest.mark.parametrize(
     ("action", "message"),
     [
-        (lambda kit: kit.datamatrix("A" * 129), "128 UTF-8 bytes"),
-        (lambda kit: kit.qr("A" * 257), "256 UTF-8 bytes"),
+        (lambda kit: kit.datamatrix("A" * 3117), "3116 UTF-8 bytes"),
+        (lambda kit: kit.qr("A" * 7090), "7089 UTF-8 bytes"),
+        (lambda kit: kit.aztec("A" * 3749), "3748 UTF-8 bytes"),
+        (lambda kit: kit.pdf417("A" * 2611), "2610 UTF-8 bytes"),
         (lambda kit: kit.code128("é"), "ASCII"),
         (lambda kit: kit.code39("lowercase"), "fullascii"),
         (lambda kit: kit.codabar("12345"), "start and end"),
@@ -58,4 +60,3 @@ def test_boolean_is_not_accepted_as_integer() -> None:
 def test_unknown_symbology_is_rejected() -> None:
     with pytest.raises(ValueError, match="Unsupported symbology"):
         BarcodeKit().generate("unknown", "ABC")
-

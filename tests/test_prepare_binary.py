@@ -49,6 +49,19 @@ def test_prepare_binary_checks_sha256(tmp_path: Path) -> None:
         assert result.stat().st_mode & stat.S_IXUSR
 
 
+@pytest.mark.parametrize("target", ["darwin-amd64", "darwin-arm64"])
+def test_prepare_macos_binary(target: str, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.write_bytes(b"macos")
+
+    result = prepare_binary(source, target, destination_dir=tmp_path / "package")
+
+    assert result == tmp_path / "package" / "barcode-rest"
+    assert result.read_bytes() == b"macos"
+    if os.name != "nt":
+        assert result.stat().st_mode & stat.S_IXUSR
+
+
 def test_prepare_binary_rejects_wrong_sha256(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.write_bytes(b"binary")
@@ -96,7 +109,7 @@ def test_prepare_verifies_copied_binary(
     verified: list[Path] = []
 
     def fake_verify(binary: Path, version: str, timeout: float = 10.0) -> None:
-        assert version == "v0.2.0"
+        assert version == "v0.3.0"
         verified.append(binary)
 
     monkeypatch.setattr(_MODULE, "verify_binary", fake_verify)
@@ -104,7 +117,7 @@ def test_prepare_verifies_copied_binary(
     result = prepare_binary(
         source,
         "linux-amd64",
-        expected_version="v0.2.0",
+        expected_version="v0.3.0",
         destination_dir=destination_dir,
     )
 
@@ -129,7 +142,7 @@ def test_failed_verification_removes_copied_binary(
         prepare_binary(
             source,
             "linux-amd64",
-            expected_version="v0.2.0",
+            expected_version="v0.3.0",
             destination_dir=destination_dir,
         )
 

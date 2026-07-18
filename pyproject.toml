@@ -8,9 +8,10 @@ version = "0.1.2"
 description = "Generate barcode PNGs with the local barcode-rest command-line tool."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "Apache-2.0"
 license-files = [
     "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "licenses/*.txt",
 ]
@@ -18,9 +19,10 @@ authors = [{ name = "Moge800" }]
 keywords = ["barcode", "datamatrix", "qr", "code128", "barcode-rest"]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",

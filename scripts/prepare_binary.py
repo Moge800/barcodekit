@@ -15,6 +15,8 @@ _TARGET_FILENAMES = {
     "windows-amd64": "barcode-rest.exe",
     "linux-amd64": "barcode-rest",
     "linux-arm64": "barcode-rest",
+    "darwin-amd64": "barcode-rest",
+    "darwin-arm64": "barcode-rest",
 }
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -126,7 +128,7 @@ def prepare_binary(
         other_binary.unlink()
 
     shutil.copy2(source, destination)
-    if target.startswith("linux-"):
+    if target != "windows-amd64":
         mode = destination.stat().st_mode
         destination.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if expected_version is not None:
