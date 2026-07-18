@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ._core import BarcodeImage, BarcodeKit
 from ._errors import (
+    BarcodeKitBatchError,
     BarcodeKitBinaryNotFound,
     BarcodeKitCommandError,
     BarcodeKitError,
@@ -190,6 +191,7 @@ def ean8(
 __all__ = [
     "BarcodeImage",
     "BarcodeKit",
+    "BarcodeKitBatchError",
     "BarcodeKitBinaryNotFound",
     "BarcodeKitCommandError",
     "BarcodeKitError",

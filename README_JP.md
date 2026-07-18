@@ -64,6 +64,37 @@ with BarcodeKit(server=True) as kit:
     image = kit.qr("https://example.com")
 ```
 
+### 並列一括生成
+
+常駐serverモードでは、独立した画像を並列生成できます。`generate_many()` の返却順は
+入力順と同じです。
+
+```python
+from barcodekit import barcodekit
+
+values = [f"ITEM-{index:06d}" for index in range(10_000)]
+
+with barcodekit(server=True) as kit:
+    images = kit.generate_many("datamatrix", values, workers=8, size=256)
+```
+
+大量またはstreaming入力では `imap()` を使用できます。待機queueを最大
+`workers` の2倍に抑え、入力順に画像を返します。
+
+```python
+with barcodekit(server=True) as kit:
+    for index, image in enumerate(
+        kit.imap("qr", values, workers=8, size=256, level="M")
+    ):
+        image.save(f"qr-{index:06d}.png")
+```
+
+並列生成には `server=True` が必要です。`workers` を省略した場合は、検出したCPU数を
+最大8として使用します。worker数を増やせば常に速くなるわけではないため、実際に使う
+バーコード形式と環境でbenchmarkを取ってください。個別の生成に失敗した場合は、
+`BarcodeKitBatchError.index` から0始まりの入力位置を確認できます。例外messageに入力
+本文は含めません。
+
 `datamatrix`、`qr`、`aztec` では、`size` と `module` を同時に指定できません。
 モジュールサイズを直接指定する場合は、`size=None` を設定してください。
 
@@ -200,6 +231,16 @@ uv run ruff check .
 uv run mypy src/barcodekit
 uv build
 ```
+
+依存なしのbenchmarkで、現在の環境におけるワンショットCLIと常駐serverのworker数を
+比較できます。
+
+```bash
+uv run python scripts/benchmark.py --count 200 --workers 1 2 4 8
+```
+
+batch処理時間のmedian・p95と1秒あたりの生成数を表示します。性能値は環境依存のため、
+CIの合否条件には使用しません。
 
 単体テストでは `subprocess.run` をmockするため、Go実行ファイルは不要です。
 `BARCODEKIT_BINARY` が設定されている場合、任意の統合テストで実際のData Matrix画像を

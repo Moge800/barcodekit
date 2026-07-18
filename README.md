@@ -65,6 +65,37 @@ with BarcodeKit(server=True) as kit:
     image = kit.qr("https://example.com")
 ```
 
+### Parallel bulk generation
+
+Resident server mode can generate independent images concurrently. Results
+from `generate_many()` remain in the same order as the input values:
+
+```python
+from barcodekit import barcodekit
+
+values = [f"ITEM-{index:06d}" for index in range(10_000)]
+
+with barcodekit(server=True) as kit:
+    images = kit.generate_many("datamatrix", values, workers=8, size=256)
+```
+
+For large or streaming inputs, `imap()` keeps at most twice the configured
+worker count queued and yields images in input order:
+
+```python
+with barcodekit(server=True) as kit:
+    for index, image in enumerate(
+        kit.imap("qr", values, workers=8, size=256, level="M")
+    ):
+        image.save(f"qr-{index:06d}.png")
+```
+
+Parallel generation requires `server=True`. If `workers` is omitted,
+barcodekit uses the detected CPU count, capped at 8. More workers are not
+always faster, so benchmark the intended barcode type and host. If an item
+fails, `BarcodeKitBatchError.index` identifies its zero-based input position
+without including the input text in the error message.
+
 For `datamatrix`, `qr`, and `aztec`, `size` and `module` are mutually exclusive.
 Set `size=None` when selecting the module size directly:
 
@@ -206,6 +237,17 @@ uv run ruff check .
 uv run mypy src/barcodekit
 uv build
 ```
+
+Run the dependency-free benchmark to compare one-shot CLI generation with
+resident server worker counts on the current machine:
+
+```bash
+uv run python scripts/benchmark.py --count 200 --workers 1 2 4 8
+```
+
+The benchmark reports median batch latency, p95 batch latency, and images per
+second. Performance values are environment-specific and are not CI pass/fail
+criteria.
 
 Unit tests mock `subprocess.run` and do not need the Go executable. If
 `BARCODEKIT_BINARY` is set, the optional integration test generates a real
